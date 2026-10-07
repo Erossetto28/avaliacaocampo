@@ -275,7 +275,7 @@ dialog{color:var(--ink)}
 .lb-top{justify-content:space-between}
 .lb-count{font:600 15px/1 var(--f-data);color:var(--lb-fg);padding-left:6px}
 .lb-stage{position:relative;display:grid;place-items:center;min-height:0;overflow:hidden}
-.lb-stage img{display:block;max-width:100%;max-height:100%;object-fit:contain}
+.lb-stage img{position:absolute;top:12px;left:12px;width:calc(100% - 24px);height:calc(100% - 24px);max-width:none;object-fit:contain}
 .lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:68px;border:0;border-radius:12px;background:var(--lb-btn);color:var(--lb-fg);display:grid;place-items:center;cursor:pointer}
 .lb-prev{left:8px}
 .lb-next{right:8px}
@@ -819,7 +819,7 @@ async function buildReportPdf(L, info, opts) {
   }
 
   /* ---- uma seção por avaliação ---- */
-  /* todas as fotos no mesmo quadro 4:3, preenchendo o quadro (recorte só na exibição; o arquivo original vai inteiro no PDF) */
+  /* todas as fotos no mesmo quadro 4:3, inteiras (sem corte), centralizadas no quadro */
   var G = 12, cellW = (CW - G) / 2, cellH = Math.round(cellW * 3 / 4), capH = 13;
   for (var e = 0; e < evs.length; e++) {
     var ev = evs[e];
@@ -886,7 +886,7 @@ async function buildReportPdf(L, info, opts) {
         else { it.img = await doc.embedPng(bytes); it.o = 1; }
         var rw = it.img.width, rh = it.img.height, swap = it.o >= 5;
         var dw = swap ? rh : rw, dh = swap ? rw : rh;
-        var s = Math.max(cellW / dw, cellH / dh);
+        var s = Math.min(cellW / dw, cellH / dh);
         it.w = dw * s; it.h = dh * s;
       } catch (err) { it.fail = true; }
       items.push(it);
@@ -905,6 +905,7 @@ async function buildReportPdf(L, info, opts) {
           var msg = 'Foto ' + q.n + ' indisponível';
           draw(msg, cx + (cellW - tw(msg, 9.5, FB)) / 2, yb + cellH / 2 - 3, 9.5, FB, C.ink2);
         } else {
+          page.drawRectangle({ x: cx, y: yb, width: cellW, height: cellH, color: C.panel });
           var key = page.node.newXObject('Image', q.img.ref);
           var ix = cx + (cellW - q.w) / 2, iy = yb + (cellH - q.h) / 2;
           var m = orientMatrix(q.o, ix, iy, q.w, q.h);

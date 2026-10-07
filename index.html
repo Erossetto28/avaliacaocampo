@@ -819,7 +819,8 @@ async function buildReportPdf(L, info, opts) {
   }
 
   /* ---- uma seção por avaliação ---- */
-  var G = 14, cellW = (CW - G) / 2, maxH = 312, capH = 14;
+  /* todas as fotos no mesmo quadro 4:3, preenchendo o quadro (recorte só na exibição; o arquivo original vai inteiro no PDF) */
+  var G = 12, cellW = (CW - G) / 2, cellH = Math.round(cellW * 3 / 4), capH = 13;
   for (var e = 0; e < evs.length; e++) {
     var ev = evs[e];
     var fotos = ev.fotos || [];
@@ -885,36 +886,33 @@ async function buildReportPdf(L, info, opts) {
         else { it.img = await doc.embedPng(bytes); it.o = 1; }
         var rw = it.img.width, rh = it.img.height, swap = it.o >= 5;
         var dw = swap ? rh : rw, dh = swap ? rw : rh;
-        var s = Math.min(cellW / dw, maxH / dh);
+        var s = Math.max(cellW / dw, cellH / dh);
         it.w = dw * s; it.h = dh * s;
-      } catch (err) { it.fail = true; it.w = cellW; it.h = 120; }
+      } catch (err) { it.fail = true; }
       items.push(it);
     }
-    var firstRow = items.length ? Math.max.apply(null, items.slice(0, 2).map(function (q) { return q.h; })) + 8 + capH : 30;
-    label('Registro fotográfico', 18, 24 + firstRow);
+    var rowH = cellH + 6 + capH;
+    label('Registro fotográfico', 18, 24 + (items.length ? rowH : 30));
     if (!items.length) { draw('Nenhuma foto registrada nesta avaliação.', M, y - 6, 10, F, C.ink2); y -= 24; }
     for (var r = 0; r < items.length; r += 2) {
       var row = items.slice(r, r + 2);
-      var rowH = Math.max.apply(null, row.map(function (q) { return q.h; })) + 8 + capH;
       if (y - rowH < BOTTOM) newPage();
       row.forEach(function (q, k) {
         var cx = M + k * (cellW + G);
-        var x = q.fail ? cx : cx + (cellW - q.w) / 2;
-        var yb = y - q.h;
+        var yb = y - cellH;
         if (q.fail) {
-          page.drawRectangle({ x: cx, y: yb, width: cellW, height: q.h, color: C.panel, borderColor: C.rule, borderWidth: 0.6 });
+          page.drawRectangle({ x: cx, y: yb, width: cellW, height: cellH, color: C.panel, borderColor: C.rule, borderWidth: 0.6 });
           var msg = 'Foto ' + q.n + ' indisponível';
-          draw(msg, cx + (cellW - tw(msg, 9.5, FB)) / 2, yb + q.h / 2 - 3, 9.5, FB, C.ink2);
+          draw(msg, cx + (cellW - tw(msg, 9.5, FB)) / 2, yb + cellH / 2 - 3, 9.5, FB, C.ink2);
         } else {
           var key = page.node.newXObject('Image', q.img.ref);
-          var m = orientMatrix(q.o, x, yb, q.w, q.h);
-          page.pushOperators(L.pushGraphicsState(), L.concatTransformationMatrix(m[0], m[1], m[2], m[3], m[4], m[5]), L.drawObject(key), L.popGraphicsState());
-          page.drawRectangle({ x: x, y: yb, width: q.w, height: q.h, borderColor: C.rule, borderWidth: 0.5 });
+          var ix = cx + (cellW - q.w) / 2, iy = yb + (cellH - q.h) / 2;
+          var m = orientMatrix(q.o, ix, iy, q.w, q.h);
+          page.pushOperators(L.pushGraphicsState(), L.rectangle(cx, yb, cellW, cellH), L.clip(), L.endPath(),
+            L.concatTransformationMatrix(m[0], m[1], m[2], m[3], m[4], m[5]), L.drawObject(key), L.popGraphicsState());
+          page.drawRectangle({ x: cx, y: yb, width: cellW, height: cellH, borderColor: C.rule, borderWidth: 0.5 });
         }
-        var lab = 'Foto ' + q.n, capY = yb - 8 - 7;
-        draw(lab, x, capY, 8.5, FB, C.ink);
-        var lw = tw(lab, 8.5, FB) + 6;
-        if (q.nome) draw(ellipsis(q.nome, 8, F, q.w - lw), x + lw, capY, 8, F, C.ink2);
+        draw('Foto ' + q.n, cx, yb - 6 - 8, 8.5, FB, C.ink2);
       });
       y -= rowH + G;
     }
@@ -1797,7 +1795,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     var btn = $('#lb-dl');
     btn.disabled = true;
     try {
-      var r = await fetchsrcFoto(f);
+      var r = await fetch(srcFoto(f), { cache: 'reload' });
       if (!r.ok) throw { code: 'fetch' };
       var blob = await r.blob();
       await S.downloads.save({ filename: photoFileName(f), data: blob });
@@ -1910,7 +1908,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
           feitas++;
           prog.set('Baixando foto ' + feitas + ' de ' + total + ' (original)…', 0.05 + 0.8 * ((feitas - 1) / Math.max(1, total)));
           try {
-            var r = await fetchsrcFoto(f);
+            var r = await fetch(srcFoto(f), { cache: 'reload' });
             if (!r.ok) throw new Error('http ' + r.status);
             var buf = await r.arrayBuffer();
             if (f.sha256) { try { if (hex(await crypto.subtle.digest('SHA-256', buf)) !== f.sha256) diferentes++; } catch (x) { /* sem verificação */ } }

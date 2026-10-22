@@ -35,6 +35,8 @@
   --on-tag:#FFFFFF;
   --danger:#B42318;
   --danger-soft:#FBE4E1;
+  --warn:#9A5B00;
+  --warn-soft:#FBEBCF;
   --on-danger:#FFFFFF;
   --shade:rgba(12,18,14,.55);
   --shadow:0 1px 2px rgba(23,33,26,.06),0 6px 16px rgba(23,33,26,.06);
@@ -57,7 +59,7 @@
     --focus:#7DBF808C;--focus-soft:#7DBF802E;
     --elysian:#86B4DE;--elysian-soft:#1B2C3C;--humaax:#D9A866;--humaax-soft:#36291A;
     --other:#A7B2AA;--other-soft:#262F28;--on-tag:#0D120F;
-    --danger:#F28B80;--danger-soft:#3A1D1A;--on-danger:#1B0B09;
+    --danger:#F28B80;--danger-soft:#3A1D1A;--on-danger:#1B0B09;--warn:#F0B35A;--warn-soft:#3A2A12;
     --shade:rgba(0,0,0,.62);
     --shadow:0 1px 2px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.28);
     color-scheme:dark;
@@ -70,7 +72,7 @@
   --focus:#7DBF808C;--focus-soft:#7DBF802E;
   --elysian:#86B4DE;--elysian-soft:#1B2C3C;--humaax:#D9A866;--humaax-soft:#36291A;
   --other:#A7B2AA;--other-soft:#262F28;--on-tag:#0D120F;
-  --danger:#F28B80;--danger-soft:#3A1D1A;--on-danger:#1B0B09;
+  --danger:#F28B80;--danger-soft:#3A1D1A;--on-danger:#1B0B09;--warn:#F0B35A;--warn-soft:#3A2A12;
   --shade:rgba(0,0,0,.62);
   --shadow:0 1px 2px rgba(0,0,0,.35),0 6px 18px rgba(0,0,0,.28);
   color-scheme:dark;
@@ -156,6 +158,32 @@ h1{margin:0;font-family:var(--f-display);font-weight:800;font-stretch:112.5%;fon
 .folder-status.done{color:var(--ink)}
 .folder-status.done .dot{background:var(--leaf);border-color:var(--leaf)}
 @media (prefers-reduced-motion:reduce){.folder-body{transition:none}}
+
+/* biometria */
+.bio-var{display:grid;gap:10px;padding:12px;border-radius:11px;background:var(--sheet-2);border:1px solid var(--rule)}
+.pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.input.bio-in{font-size:16px;min-height:48px;padding:0 12px}
+.bio-res{margin:0;min-height:1.2em;font-size:13.5px;color:var(--ink-2)}
+
+/* prazos de avaliação */
+.due{display:inline-flex;align-items:center;gap:7px;justify-self:start;max-width:100%;margin-top:4px;padding:5px 10px;border-radius:8px;font-size:14px;font-weight:700;line-height:1.3;color:var(--ink-2);background:var(--sheet-2)}
+.due .dot{width:8px;height:8px;border-radius:50%;background:currentColor;flex:none}
+.due-janela{color:var(--warn);background:var(--warn-soft)}
+.due-atrasada{color:var(--danger);background:var(--danger-soft)}
+.due-off{font-weight:500}
+.duebox{display:grid;gap:8px;margin-top:20px;padding:14px;border-radius:14px;background:var(--sheet);border:1px solid var(--rule);border-left:4px solid var(--warn)}
+.duebox.late{border-left-color:var(--danger)}
+.duebox h2{margin:0}
+.duerow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px;padding:10px 0;border-top:1px solid var(--rule);text-decoration:none;color:inherit}
+.duerow:first-of-type{border-top:0}
+.duerow b{font-size:16px;overflow-wrap:anywhere}
+.duerow .due{margin-top:2px}
+.duerow .ico{color:var(--ink-3);grid-row:1/3;grid-column:2}
+.duerow:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:8px}
+.check-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid var(--rule);border-radius:11px;cursor:pointer}
+.check-row input{width:22px;height:22px;margin:0;accent-color:var(--leaf);flex:none}
+.check-row span{display:grid;min-width:0}
+.check-row small{color:var(--ink-2);font-size:14px}
 
 .empty{display:grid;gap:6px;background:var(--sheet);border:1.5px dashed var(--rule);border-radius:14px;padding:20px 18px;color:var(--ink-2)}
 .empty strong{color:var(--ink);font-size:17px}
@@ -365,6 +393,7 @@ dialog{color:var(--ink)}
       <input class="input" type="date" id="f-plantio">
       <p class="err" id="e-plantio" hidden></p>
     </div>
+    <label class="check-row" id="enc-wrap" hidden><input type="checkbox" id="f-encerrado"><span><b>Encerrar acompanhamento</b><small>Para de mostrar os avisos de avaliação deste produtor.</small></span></label>
     <p class="err" id="e-form" hidden></p>
     <div class="sheet-actions">
       <button type="button" class="btn" data-close>Cancelar</button>
@@ -558,6 +587,43 @@ function popDiff(padrao, teste) {
   if (padrao > 0) { var pc = d / padrao * 100; s += ' (' + (pc > 0 ? '+' : pc < 0 ? '-' : '') + fmtNum(Math.abs(Math.round(pc * 10) / 10)) + '%)'; }
   return s;
 }
+/* Biometria de plantas: variáveis opcionais; só entram no relatório as que estiverem marcadas */
+var BIO = [
+  { k: 'altura', nome: 'Altura de planta', un: 'cm', dec: 1, ph: 'Ex.: 35 34,5 36' },
+  { k: 'nos', nome: 'Nós na haste principal', un: 'nós', dec: 1, ph: 'Ex.: 11 10 12' },
+  { k: 'entreno', nome: 'Distância entre nós', un: 'cm', dec: 2, ph: 'Vazio = altura ÷ nós' }
+];
+function fmtDec(n, d) { return (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }) : ''; }
+function fmtIn(n) { return (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 3, useGrouping: false }) : ''; }
+/* "35 34,5 36" -> [35, 34.5, 36]; null quando algum valor não é número */
+function parseLista(s) {
+  s = String(s == null ? '' : s).trim();
+  if (!s) return [];
+  var out = [], parts = s.split(/[\s;]+/).filter(Boolean);
+  for (var i = 0; i < parts.length; i++) {
+    var n = parseNum(parts[i].replace(/,$/, ''));
+    if (typeof n !== 'number' || !isFinite(n) || n < 0 || n >= 10000) return null;
+    out.push(n);
+  }
+  return out;
+}
+function media(L) { if (!L || !L.length) return null; var s = 0; L.forEach(function (x) { s += x; }); return s / L.length; }
+function bioValor(bio, k, lado) {
+  var L = (bio && bio[k] && Array.isArray(bio[k][lado])) ? bio[k][lado] : [];
+  var m = media(L);
+  if (m != null) return { media: m, n: L.length, calc: false };
+  if (k === 'entreno') {
+    var a = bioValor(bio, 'altura', lado), n = bioValor(bio, 'nos', lado);
+    if (a && n && n.media > 0) return { media: a.media / n.media, n: 0, calc: true };
+  }
+  return null;
+}
+function diffTxt(a, b, un, dec) {
+  var r = Math.pow(10, dec), d = Math.round((b - a) * r) / r;
+  var s = (d > 0 ? '+' : d < 0 ? '-' : '') + fmtDec(Math.abs(d), dec) + (un ? ' ' + un : '');
+  if (a > 0) { var pc = Math.round((b - a) / a * 1000) / 10; s += ' (' + (pc > 0 ? '+' : pc < 0 ? '-' : '') + fmtDec(Math.abs(pc), 1) + '%)'; }
+  return s;
+}
 function dapLabel(n) { return n === 1 ? '1 dia após o plantio' : n + ' dias após o plantio'; }
 function fmtNum(n) { return (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) : ''; }
 function parseNum(s) {
@@ -592,6 +658,36 @@ function nextEvalKey(p) {
   var av = (p && p.avaliacoes) || {}, max = 0;
   Object.keys(av).forEach(function (k) { if (/^a\d+$/.test(k)) max = Math.max(max, evalNum(k)); });
   return 'a' + (max + 1);
+}
+/* Prazo das avaliações: janela de 10 a 15 dias após a última avaliação (ou após o plantio, antes da primeira). */
+var PRAZO_INICIO = 10, PRAZO_FIM = 15;
+function addDays(iso, n) {
+  if (!isISODate(iso)) return '';
+  var p = iso.split('-').map(Number), d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
+  return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+}
+function statusAval(p, hoje) {
+  if (!p) return null;
+  if (p.encerrado) return { estado: 'off' };
+  hoje = hoje || todayISO();
+  var base = '', origem = 'ultima';
+  evalList(p).forEach(function (e) { if (evalTemConteudo(e.a, 0) && isISODate(e.a.data) && e.a.data > base) base = e.a.data; });
+  if (!base) { if (!isISODate(p.dataPlantio)) return null; base = p.dataPlantio; origem = 'plantio'; }
+  var dias = daysBetween(base, hoje);
+  return {
+    estado: dias < PRAZO_INICIO ? 'ok' : dias <= PRAZO_FIM ? 'janela' : 'atrasada',
+    base: base, origem: origem, dias: dias,
+    inicio: addDays(base, PRAZO_INICIO), limite: addDays(base, PRAZO_FIM),
+    faltam: PRAZO_INICIO - dias, restam: PRAZO_FIM - dias, atraso: dias - PRAZO_FIM
+  };
+}
+function textoAval(st) {
+  if (!st) return '';
+  if (st.estado === 'off') return 'Acompanhamento encerrado';
+  if (st.estado === 'ok') return 'Próxima avaliação a partir de ' + fmtDateShort(st.inicio) + (st.faltam === 1 ? ' (amanhã)' : ' (em ' + st.faltam + ' dias)');
+  if (st.estado === 'janela') return st.restam === 0 ? 'Avaliar hoje · último dia do prazo'
+    : 'Avaliar até ' + fmtDateShort(st.limite) + ' · ' + (st.restam === 1 ? 'resta 1 dia' : 'restam ' + st.restam + ' dias');
+  return 'Avaliação atrasada há ' + (st.atraso === 1 ? '1 dia' : st.atraso + ' dias') + ' (prazo era ' + fmtDateShort(st.limite) + ')';
 }
 function evalTemConteudo(a, nFotos) {
   return !!(a && (a.estadio || (a.obs && String(a.obs).trim()) || a.nFotos)) || nFotos > 0;
@@ -693,7 +789,8 @@ async function buildReportPdf(L, info, opts) {
 
   var C = {
     ink: L.rgb(0.09, 0.13, 0.10), ink2: L.rgb(0.34, 0.39, 0.35), rule: L.rgb(0.80, 0.84, 0.79),
-    leaf: L.rgb(0.18, 0.41, 0.23), leafSoft: L.rgb(0.74, 0.86, 0.75), panel: L.rgb(0.945, 0.957, 0.935), white: L.rgb(1, 1, 1)
+    leaf: L.rgb(0.18, 0.41, 0.23), leafSoft: L.rgb(0.74, 0.86, 0.75), panel: L.rgb(0.945, 0.957, 0.935), white: L.rgb(1, 1, 1),
+    orange: L.rgb(0.95, 0.49, 0.06), grey: L.rgb(0.72, 0.75, 0.72), bandSub: L.rgb(0.80, 0.84, 0.81), bandLine: L.rgb(0.30, 0.35, 0.31)
   };
   var PW = 595.28, PH = 841.89, M = 42, CW = PW - 2 * M, BOTTOM = 58;
   var pages = [], page = null, y = 0, tag = '', cont = '';
@@ -726,6 +823,18 @@ async function buildReportPdf(L, info, opts) {
     if (cur) lines.push(cur);
     return lines.length ? lines : [''];
   }
+  /* retângulo de cantos arredondados; yTop é a borda de cima */
+  function rrect(x, yTop, w, h, r, opt) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    var p = 'M' + r + ',0 H' + (w - r) + ' Q' + w + ',0 ' + w + ',' + r + ' V' + (h - r) + ' Q' + w + ',' + h + ' ' + (w - r) + ',' + h +
+      ' H' + r + ' Q0,' + h + ' 0,' + (h - r) + ' V' + r + ' Q0,0 ' + r + ',0 Z';
+    page.drawSvgPath(p, Object.assign({ x: x, y: yTop }, opt));
+  }
+  function pctTxt(a, b) {
+    if (!(a > 0)) return '—';
+    var pc = Math.round((b - a) / a * 1000) / 10;
+    return (pc > 0 ? '+' : pc < 0 ? '-' : '') + fmtDec(Math.abs(pc), 1) + '%';
+  }
   function hline(yy, th, color) { page.drawLine({ start: { x: M, y: yy }, end: { x: M + CW, y: yy }, thickness: th, color: color }); }
   function ensure(hgt) { if (y - hgt < BOTTOM) newPage(); }
   function label(t, after, need) {
@@ -756,7 +865,7 @@ async function buildReportPdf(L, info, opts) {
     ensure(hh + rh);
     page.drawRectangle({ x: M, y: y - hh, width: CW, height: hh, color: C.panel });
     var x = M;
-    cols.forEach(function (c) { draw(c.t.toUpperCase(), x + 8, y - 14.5, 7.5, FB, C.ink2); x += c.w; });
+    cols.forEach(function (c) { draw(ellipsis(c.t.toUpperCase(), 7.5, FB, c.w - 12), x + 8, y - 14.5, 7.5, FB, C.ink2); x += c.w; });
     y -= hh;
     data.forEach(function (r) {
       ensure(rh);
@@ -843,14 +952,87 @@ async function buildReportPdf(L, info, opts) {
     draw(meta, M, y - 4, 10, F, C.ink2);
     y -= 28;
 
+    /* comparativo teste × padrão fazenda: população final e as variáveis de biometria marcadas */
+    var itens = [], temCalc = false;
     var pp = typeof ev.popPadrao === 'number' ? ev.popPadrao : null, pt = typeof ev.popTeste === 'number' ? ev.popTeste : null;
-    if (pp != null || pt != null) {
-      label('População final (plantas/m)', 12);
-      var nomeTeste = 'Teste' + (info.teste ? ' (' + info.teste + (info.dose ? ' ' + info.dose : '') + ')' : '');
-      var w3 = CW / 3;
-      table([{ t: 'Padrão fazenda', w: w3 }, { t: nomeTeste, w: w3 }, { t: 'Diferença do teste', w: CW - 2 * w3 }],
-        [[pp != null ? fmtNum(pp) : '—', pt != null ? fmtNum(pt) : '—', (pp != null && pt != null) ? popDiff(pp, pt) : '—']]);
-      y -= 26;
+    if (pp != null || pt != null) itens.push({ nome: 'População final', un: 'plantas/m', dec: 1,
+      A: pp != null ? { media: pp, n: 0 } : null, B: pt != null ? { media: pt, n: 0 } : null });
+    var bio = ev.bio || {};
+    BIO.forEach(function (v) {
+      if (!Array.isArray(bio.vars) || bio.vars.indexOf(v.k) < 0) return;
+      var A = bioValor(bio, v.k, 'padrao'), B = bioValor(bio, v.k, 'teste');
+      if (!A && !B) return;
+      if ((A && A.calc) || (B && B.calc)) temCalc = true;
+      itens.push({ nome: v.nome, un: v.un, dec: v.dec, A: A, B: B });
+    });
+    if (itens.length) {
+      var nomeTeste = [info.teste, info.dose].filter(Boolean).join(' ') || 'Teste';
+      var curtoTeste = info.teste || 'Teste';
+      var comp = itens.filter(function (it) { return it.A && it.B; });
+      var bandH = 60, cardW = (CW - 12) / 2, cardH = 148;
+      label('Teste × padrão fazenda', 16, 34 + (comp.length ? bandH + 14 : 0) + cardH);
+
+      /* legenda */
+      page.drawRectangle({ x: M, y: y - 9, width: 9, height: 9, color: C.orange });
+      draw(nomeTeste, M + 14, y - 8, 8.5, FB, C.ink);
+      var lx = M + 14 + tw(nomeTeste, 8.5, FB) + 18;
+      page.drawRectangle({ x: lx, y: y - 9, width: 9, height: 9, color: C.grey });
+      draw('Padrão fazenda', lx + 14, y - 8, 8.5, FB, C.ink);
+      y -= 22;
+
+      /* faixa de destaques: variação percentual do teste */
+      if (comp.length) {
+        var nc = comp.length, colW = CW / nc;
+        rrect(M, y, CW, bandH, 7, { color: C.ink });
+        comp.forEach(function (it, i) {
+          var cx = M + i * colW;
+          if (i) page.drawLine({ start: { x: cx, y: y - 12 }, end: { x: cx, y: y - bandH + 12 }, thickness: 0.6, color: C.bandLine });
+          draw(pctTxt(it.A.media, it.B.media), cx + 14, y - 31, 21, FB, C.orange);
+          draw(ellipsis(it.nome, 8, F, colW - 24), cx + 14, y - 47, 8, F, C.bandSub);
+        });
+        y -= bandH + 14;
+      }
+
+      /* cartões com colunas: padrão × teste em escala a partir de zero */
+      for (var c = 0; c < itens.length; c += 2) {
+        if (y - cardH < BOTTOM) newPage();
+        itens.slice(c, c + 2).forEach(function (it, k) {
+          var x = M + k * (cardW + 12), top = y;
+          rrect(x, top, cardW, cardH, 7, { color: C.white, borderColor: C.rule, borderWidth: 0.8 });
+          var uw = tw(it.un, 8, F);
+          draw(ellipsis(it.nome, 10, FB, cardW - 36 - uw), x + 14, top - 20, 10, FB, C.ink);
+          draw(it.un, x + cardW - 14 - uw, top - 20, 8, F, C.ink2);
+          var base = top - cardH + 26, hmax = 64, colw = 34;
+          var mx = Math.max(it.A ? it.A.media : 0, it.B ? it.B.media : 0) || 1;
+          page.drawLine({ start: { x: x + 14, y: base }, end: { x: x + 134, y: base }, thickness: 0.8, color: C.rule });
+          [[it.A, C.grey, 'Padrão'], [it.B, C.orange, curtoTeste]].forEach(function (s, j) {
+            var cx = x + 22 + j * (colw + 22), val = s[0];
+            draw(ellipsis(s[2], 7.5, F, colw + 18), cx, base - 11, 7.5, F, C.ink2);
+            if (!val) { draw('—', cx + colw / 2 - 3, base + 6, 10, FB, C.ink2); return; }
+            var hh = Math.max(2, val.media / mx * hmax);
+            rrect(cx, base + hh, colw, hh, Math.min(4, hh / 2), { color: s[1] });
+            page.drawRectangle({ x: cx, y: base, width: colw, height: Math.min(4, hh / 2), color: s[1] });
+            var vt = fmtDec(val.media, it.dec) + (val.calc ? '*' : '');
+            draw(vt, cx + (colw - tw(vt, 10, FB)) / 2, base + hh + 5, 10, FB, C.ink);
+          });
+          var rx = x + 148;
+          page.drawLine({ start: { x: rx - 8, y: top - 34 }, end: { x: rx - 8, y: base }, thickness: 0.6, color: C.rule });
+          draw('DIFERENÇA', rx, top - 46, 7, FB, C.ink2);
+          if (it.A && it.B) {
+            draw(ellipsis(pctTxt(it.A.media, it.B.media), 19, FB, cardW - 160), rx, top - 70, 19, FB, C.ink);
+            draw(ellipsis(diffTxt(it.A.media, it.B.media, it.un, it.dec).replace(/\s*\(.*\)$/, ''), 9, F, cardW - 160), rx, top - 86, 9, F, C.ink);
+          } else draw('—', rx, top - 70, 19, FB, C.ink2);
+          var ns = [it.A, it.B].map(function (s) { return s && s.n ? s.n : 0; });
+          if (ns[0] || ns[1]) {
+            var pl = function (n) { return n ? n + (n === 1 ? ' planta' : ' plantas') : '—'; };
+            draw('Padrão: ' + pl(ns[0]), rx, top - 104, 7.5, F, C.ink2);
+            draw(ellipsis(curtoTeste + ': ' + pl(ns[1]), 7.5, F, cardW - 160), rx, top - 114, 7.5, F, C.ink2);
+          }
+        });
+        y -= cardH + 12;
+      }
+      if (temCalc) { draw('* Calculada pela altura de planta ÷ número de nós.', M, y - 2, 8, F, C.ink2); y -= 12; }
+      y -= 20;
     }
 
     label('Observações', 14);
@@ -1181,6 +1363,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     var searchWrap = h('div', { class: 'search-wrap', hidden: true }, search);
     var list = h('div', { class: 'folders' });
     var usage = h('p', { class: 'usage' });
+    var dueWrap = h('div');
     view.append(
       h('div', { class: 'brand' },
         h('img', { class: 'logo-on-light', src: LOGO_ESCURA, alt: 'Verdivo Agroscience' }),
@@ -1188,16 +1371,18 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
       h('header', { class: 'top' },
         h('div', { class: 'eyebrow' }, 'Avaliação agronômica de campo'),
         h('div', { class: 'top-row' }, h('h1', null, 'Produtores'), count)),
-      searchWrap, list, usage);
+      dueWrap, searchWrap, list, usage);
     var btnNovo = h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { openProdForm(null); } }, icon('plus', 22), 'Novo produtor');
     setBar([btnNovo]);
 
     function upd() {
       btnNovo.hidden = !S.db || !!S.failed || !S.canWrite;
       syncBar();
-      if (S.failed) { list.replaceChildren(failBox()); count.textContent = ''; searchWrap.hidden = true; usage.textContent = ''; return; }
+      if (S.failed) { list.replaceChildren(failBox()); count.textContent = ''; searchWrap.hidden = true; usage.textContent = ''; dueWrap.replaceChildren(); return; }
       if (!S.loaded) { list.replaceChildren(h('div', { class: 'skel' }), h('div', { class: 'skel' }), h('div', { class: 'skel' })); return; }
       var all = Array.from(S.produtores.entries());
+      var box = dueBox(all);
+      dueWrap.replaceChildren.apply(dueWrap, box ? [box] : []);
       count.textContent = all.length ? String(all.length) : '';
       searchWrap.hidden = all.length < 6;
       if (!all.length) {
@@ -1238,7 +1423,25 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         h('span', { class: 'folder-name' }, p.nome || 'Sem nome'),
         p.consultor ? h('span', { class: 'folder-cons' }, h('span', { class: 'muted' }, 'Consultor: '), p.consultor) : null,
         h('span', { class: 'folder-meta' }, meta, dap != null && dap >= 0 ? h('span', { class: 'mono' }, ' · ' + dap + ' DAP') : null),
-        h('span', { class: 'folder-status' + (done ? ' done' : '') }, h('span', { class: 'dot' }), status)));
+        h('span', { class: 'folder-status' + (done ? ' done' : '') }, h('span', { class: 'dot' }), status),
+        dueChip(statusAval(p))));
+  }
+  function dueChip(st) {
+    if (!st) return null;
+    return h('span', { class: 'due due-' + st.estado }, st.estado === 'ok' || st.estado === 'off' ? null : h('span', { class: 'dot' }), textoAval(st));
+  }
+  function dueBox(all) {
+    var pend = all.map(function (e) { return { id: e[0], p: e[1], st: statusAval(e[1]) }; })
+      .filter(function (x) { return x.st && (x.st.estado === 'janela' || x.st.estado === 'atrasada'); })
+      .sort(function (a, b) { return b.st.dias - a.st.dias || byName(String(a.p.nome || ''), String(b.p.nome || '')); });
+    if (!pend.length) return null;
+    var late = pend.some(function (x) { return x.st.estado === 'atrasada'; });
+    return h('section', { class: 'duebox' + (late ? ' late' : '') },
+      h('h2', { class: 'sec-t' }, 'Avaliações para fazer (' + pend.length + ')'),
+      pend.map(function (x) {
+        return h('a', { class: 'duerow', href: '#p-' + x.id },
+          h('b', null, x.p.nome || 'Sem nome'), icon('right', 20), dueChip(x.st));
+      }));
   }
 
   /* ---------- página do produtor ---------- */
@@ -1248,10 +1451,11 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     var btnEdit = h('button', { type: 'button', class: 'btn btn-sm', onclick: function () { openProdForm(pid); } }, icon('edit', 18), 'Editar');
     var ficha = h('dl', { class: 'ficha' });
     var evals = h('div', { class: 'evals' });
+    var dueLine = h('div');
     var btnNova = h('button', { type: 'button', class: 'add-eval', onclick: function () { novaAvaliacao(pid, btnNova); } }, icon('plus', 20), 'Nova avaliação');
     var content = h('div', null,
       h('section', { class: 'sec' }, h('h2', { class: 'sec-t' }, 'Dados do produtor'), ficha),
-      h('section', { class: 'sec' }, h('h2', { class: 'sec-t' }, 'Avaliações'), evals, btnNova));
+      h('section', { class: 'sec' }, h('h2', { class: 'sec-t' }, 'Avaliações'), dueLine, evals, btnNova));
     var msg = h('div', { class: 'sec', hidden: true });
     var header = h('header', { class: 'top' }, h('div', { class: 'title-col' }, chip, name));
     view.append(h('div', { class: 'nav-row' }, h('a', { class: 'back', href: '#inicio' }, icon('left', 22), h('span', null, 'Produtores')), btnEdit), header, content, msg);
@@ -1293,6 +1497,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         : [evalTile(p, pid, 'a1', 0, {})];
       evals.replaceChildren.apply(evals, tiles);
       btnNova.hidden = !S.canWrite || !lista.length;
+      var prazo = dueChip(statusAval(p));
+      dueLine.replaceChildren.apply(dueLine, prazo ? [prazo] : []);
     }
     return { update: upd };
   }
@@ -1381,11 +1587,105 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         h('div', { class: 'field' }, popTesteLbl, popTeste)),
       popErr, popInfo);
     function showPop() { popWrap.hidden = !popOpen; btnPop.hidden = popOpen || !S.canWrite; }
+
+    /* biometria de plantas: só as variáveis marcadas aparecem aqui e no relatório */
+    var bioOpen = false, bioVars = [], bioLast = {};
+    var bioIn = {}, bioOut = {}, bioBlk = {}, bioDiff = {}, bioTesteLbls = [];
+    var bioErr = h('p', { class: 'err', hidden: true }, 'Use números separados por espaço, por exemplo 35 34,5 36.');
+    var bioChips = h('div', { class: 'pills', role: 'group', 'aria-label': 'Variáveis medidas' });
+    var bioBlocks = BIO.map(function (v) {
+      bioIn[v.k] = {}; bioOut[v.k] = {};
+      var cols = ['padrao', 'teste'].map(function (lado) {
+        var id = 'bio-' + v.k + '-' + lado;
+        var inp = h('input', { id: id, class: 'input mono bio-in', autocomplete: 'off', spellcheck: 'false', maxlength: '160', placeholder: v.ph });
+        var lb = h('label', { for: id }, lado === 'padrao' ? 'Padrão fazenda' : 'Teste');
+        if (lado === 'teste') bioTesteLbls.push(lb);
+        bioIn[v.k][lado] = inp;
+        bioOut[v.k][lado] = h('p', { class: 'bio-res' });
+        inp.addEventListener('input', function () { var r = updBio(); if (r.ok) { edited = true; saver.push(vals(), 900); } });
+        inp.addEventListener('blur', function () { saver.flush(); });
+        return h('div', { class: 'field' }, lb, inp, bioOut[v.k][lado]);
+      });
+      bioDiff[v.k] = h('p', { class: 'hint' });
+      bioBlk[v.k] = h('div', { class: 'bio-var', hidden: true }, h('span', { class: 'flabel' }, v.nome + ' (' + v.un + ')'), h('div', { class: 'pair' }, cols), bioDiff[v.k]);
+      return bioBlk[v.k];
+    });
+    var btnBio = h('button', { type: 'button', class: 'add-opt', onclick: function () {
+      bioOpen = true;
+      if (!bioVars.length) bioVars = BIO.map(function (v) { return v.k; });
+      showBio(); updBio(); edited = true; saver.push(vals(), 0);
+      bioIn[bioVars[0]].padrao.focus();
+    } }, icon('plus', 20), 'Adicionar biometria de plantas');
+    var btnBioX = h('button', { type: 'button', class: 'icon-btn', 'aria-label': 'Remover biometria de plantas', onclick: function () {
+      bioOpen = false; bioVars = []; bioLast = {};
+      BIO.forEach(function (v) { bioIn[v.k].padrao.value = ''; bioIn[v.k].teste.value = ''; });
+      showBio(); updBio(); edited = true; saver.push(vals(), 0);
+    } }, icon('close', 20));
+    var bioWrap = h('div', { class: 'field', hidden: true },
+      h('div', { class: 'sec-h' }, h('span', { class: 'flabel' }, 'Biometria de plantas'), btnBioX),
+      h('p', { class: 'hint' }, 'Marque o que vai medir. Digite uma planta ou várias separadas por espaço (ex.: 35 34,5 36) e o app calcula a média. Só o que estiver marcado entra no relatório.'),
+      bioChips, bioBlocks, bioErr);
+    function showBio() { bioWrap.hidden = !bioOpen; btnBio.hidden = bioOpen || !S.canWrite; }
+    function toggleVar(k) {
+      var on = bioVars.indexOf(k) >= 0;
+      bioVars = BIO.map(function (v) { return v.k; }).filter(function (x) { return x === k ? !on : bioVars.indexOf(x) >= 0; });
+      updBio(); edited = true; saver.push(vals(), 0);
+    }
+    function bioParsed() {
+      var dados = {}, ok = true;
+      BIO.forEach(function (v) {
+        dados[v.k] = {};
+        bioLast[v.k] = bioLast[v.k] || {};
+        ['padrao', 'teste'].forEach(function (lado) {
+          var L = parseLista(bioIn[v.k][lado].value);
+          bioIn[v.k][lado].setAttribute('aria-invalid', L === null ? 'true' : 'false');
+          if (L === null) { ok = false; L = bioLast[v.k][lado] || []; } else bioLast[v.k][lado] = L;
+          dados[v.k][lado] = L;
+        });
+      });
+      return { ok: ok, dados: dados };
+    }
+    function updBio() {
+      var r = bioParsed();
+      bioErr.hidden = r.ok;
+      var tmp = Object.assign({ vars: bioVars }, r.dados);
+      BIO.forEach(function (v) {
+        bioBlk[v.k].hidden = bioVars.indexOf(v.k) < 0;
+        var X = {};
+        ['padrao', 'teste'].forEach(function (lado) {
+          var val = bioValor(tmp, v.k, lado);
+          X[lado] = val;
+          bioOut[v.k][lado].textContent = !val ? ''
+            : val.calc ? 'Calculada: ' + fmtDec(val.media, v.dec) + ' ' + v.un + ' (altura ÷ nós)'
+            : val.n > 1 ? 'Média ' + fmtDec(val.media, v.dec) + ' ' + v.un + ' · ' + val.n + ' plantas'
+            : fmtDec(val.media, v.dec) + ' ' + v.un + ' · 1 planta';
+        });
+        bioDiff[v.k].textContent = X.padrao && X.teste ? 'Diferença do teste: ' + diffTxt(X.padrao.media, X.teste.media, v.un, v.dec) : '';
+      });
+      bioChips.replaceChildren.apply(bioChips, BIO.map(function (v) {
+        return h('button', { type: 'button', class: 'pill pill-sm', 'aria-pressed': bioVars.indexOf(v.k) >= 0 ? 'true' : 'false', disabled: !S.canWrite,
+          onclick: function () { toggleVar(v.k); } }, v.nome);
+      }));
+      return r;
+    }
+    function setBio(b) {
+      b = b || {};
+      BIO.forEach(function (v) {
+        ['padrao', 'teste'].forEach(function (lado) {
+          var L = b[v.k] && Array.isArray(b[v.k][lado]) ? b[v.k][lado] : [];
+          bioIn[v.k][lado].value = L.map(fmtIn).join(' ');
+        });
+      });
+      bioVars = Array.isArray(b.vars) ? BIO.map(function (v) { return v.k; }).filter(function (k) { return b.vars.indexOf(k) >= 0; }) : [];
+      bioOpen = bioVars.length > 0;
+    }
+    function bioVals() { return Object.assign({ vars: bioOpen ? bioVars.slice() : [] }, bioParsed().dados); }
+
     var form = h('section', { class: 'card' },
       h('div', { class: 'two' },
         h('div', { class: 'field' }, h('label', { for: 'estadio' }, 'Estádio fenológico'), estadio),
         h('div', { class: 'field' }, h('label', { for: 'data-aval' }, 'Data da avaliação'), data, dap)),
-      btnPop, popWrap,
+      btnPop, popWrap, btnBio, bioWrap,
       saveState);
     var countEl = h('span', { class: 'count mono' });
     var grid = h('div', { class: 'grid' });
@@ -1411,7 +1711,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     function popValido(el) { var n = parseNum(el.value); return n === null || (isFinite(n) && n >= 0 && n < 1000); }
     function vals() {
       return { estadio: estadio.value.trim(), data: isISODate(data.value) ? data.value : '', obs: obs.value.replace(/\s+$/, ''),
-        popPadrao: popNum(popPadrao), popTeste: popNum(popTeste) };
+        popPadrao: popNum(popPadrao), popTeste: popNum(popTeste), bio: bioVals() };
     }
     function updPop() {
       var a = popNum(popPadrao), b = popNum(popTeste);
@@ -1438,7 +1738,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     var saver = makeSaver(async function (v) {
       var now = new Date().toISOString();
       var patch = { avaliacoes: {}, atualizadoEm: now };
-      patch.avaliacoes[key] = { estadio: v.estadio, data: v.data, obs: v.obs, popPadrao: v.popPadrao, popTeste: v.popTeste, atualizadoEm: now };
+      patch.avaliacoes[key] = { estadio: v.estadio, data: v.data, obs: v.obs, popPadrao: v.popPadrao, popTeste: v.popTeste, bio: v.bio, atualizadoEm: now };
       await dbw(function () { return prodRef(pid).update(patch); });
     }, function (st, e) {
       if (st === 'saved') edited = false;
@@ -1483,8 +1783,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         popPadrao.value = typeof a.popPadrao === 'number' ? fmtNum(a.popPadrao) : '';
         popTeste.value = typeof a.popTeste === 'number' ? fmtNum(a.popTeste) : '';
         popOpen = temPop;
-        saver.seed({ estadio: a.estadio || '', data: a.data || '', obs: a.obs || '',
-          popPadrao: typeof a.popPadrao === 'number' ? a.popPadrao : null, popTeste: typeof a.popTeste === 'number' ? a.popTeste : null });
+        setBio(a.bio);
+        saver.seed(Object.assign(vals(), { estadio: a.estadio || '', data: a.data || '', obs: a.obs || '' }));
         seeded = true;
         if (a.atualizadoEm) showState('saved');
       } else if (!edited && [estadio, data, obs].indexOf(document.activeElement) < 0) {
@@ -1496,7 +1796,14 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
           popTeste.value = typeof a.popTeste === 'number' ? fmtNum(a.popTeste) : '';
           if (temPop) popOpen = true;
         }
+        var focoBio = BIO.some(function (v) { return document.activeElement === bioIn[v.k].padrao || document.activeElement === bioIn[v.k].teste; });
+        if (!focoBio) setBio(a.bio);
       }
+      bioTesteLbls.forEach(function (l) { l.textContent = p.teste || 'Teste'; });
+      showBio();
+      updBio();
+      BIO.forEach(function (v) { bioIn[v.k].padrao.disabled = bioIn[v.k].teste.disabled = !S.canWrite; });
+      btnBioX.hidden = !S.canWrite;
       showPop();
       updPop();
       popPadrao.disabled = popTeste.disabled = !S.canWrite;
@@ -1917,7 +2224,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
           } catch (x) { faltando++; fotos.push({ missing: true, nome: f.nome }); }
         }
         secoes.push({ titulo: ordTitulo(e.idx), curto: ordCurto(e.idx), estadio: e.a.estadio || '', data: e.a.data || '', obs: e.a.obs || '',
-          popPadrao: e.a.popPadrao, popTeste: e.a.popTeste, fotos: fotos });
+          popPadrao: e.a.popPadrao, popTeste: e.a.popTeste, bio: e.a.bio || null, fotos: fotos });
       }
       prog.set('Montando o PDF…', 0.9);
       var bytes = await buildReportPdf(PDFLib, {
@@ -2133,6 +2440,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     $('#f-ciclo').value = p ? (p.ciclo || '') : '';
     $('#f-dose').value = p ? (p.dose || '') : '';
     $('#f-padrao').value = p ? (p.padraoFazenda || '') : '';
+    $('#enc-wrap').hidden = !p;
+    $('#f-encerrado').checked = !!(p && p.encerrado);
     buildUnidades();
     $('#f-plantio').value = p && isISODate(p.dataPlantio) ? p.dataPlantio : '';
     $('#f-outro').value = '';
@@ -2187,7 +2496,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     var now = new Date().toISOString();
     var data = {
       nome: nome, consultor: consultor, assistente: assistente, teste: teste, dose: dose, padraoFazenda: padraoFazenda, cultivar: cultivar, ciclo: ciclo,
-      sementesMetro: (typeof sem === 'number' && isFinite(sem)) ? sem : null, dataPlantio: plantio, atualizadoEm: now
+      sementesMetro: (typeof sem === 'number' && isFinite(sem)) ? sem : null, dataPlantio: plantio, atualizadoEm: now,
+      encerrado: !$('#enc-wrap').hidden && $('#f-encerrado').checked
     };
     var editing = FORM.pid;
     try {
@@ -2242,7 +2552,10 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
   document.documentElement.lang = 'pt-BR';
   fillDatalist('#dl-estadios', STAGES);
   window.addEventListener('hashchange', route);
-  document.addEventListener('visibilitychange', function () { if (document.hidden && mounted && mounted.flush) mounted.flush(); });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { if (mounted && mounted.flush) mounted.flush(); }
+    else if (S.loaded) render();
+  });
   S.route = parseHash();
   render();
 

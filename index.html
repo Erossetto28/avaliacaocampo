@@ -159,6 +159,14 @@ h1{margin:0;font-family:var(--f-display);font-weight:800;font-stretch:112.5%;fon
 .folder-status.done .dot{background:var(--leaf);border-color:var(--leaf)}
 @media (prefers-reduced-motion:reduce){.folder-body{transition:none}}
 
+/* prazos ajustáveis */
+.prazos-line{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px;margin-top:24px;font-size:14px;color:var(--ink-2)}
+.link-btn{appearance:none;border:0;background:none;padding:8px 2px;color:var(--leaf);font:700 14px/1.2 var(--f-body);text-decoration:underline;cursor:pointer}
+.link-btn:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+.range-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-size:16px;color:var(--ink-2)}
+.input.num{width:84px;text-align:center}
+.hint.fase{margin-top:6px}
+
 /* biometria */
 .bio-var{display:grid;gap:10px;padding:12px;border-radius:11px;background:var(--sheet-2);border:1px solid var(--rule)}
 .pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
@@ -180,6 +188,11 @@ h1{margin:0;font-family:var(--f-display);font-weight:800;font-stretch:112.5%;fon
 .duerow .due{margin-top:2px}
 .duerow .ico{color:var(--ink-3);grid-row:1/3;grid-column:2}
 .duerow:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:8px}
+.due-rep{color:var(--leaf);background:var(--leaf-soft)}
+.repbox{border-left-color:var(--leaf)}
+.rep-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-top:4px;font-size:14px;color:var(--ink-2)}
+.rep-meta strong{color:var(--ink)}
+.stage-tag{display:inline-flex;align-items:center;height:26px;padding:0 9px;border-radius:7px;background:var(--leaf-soft);color:var(--leaf);font:700 14px/1 var(--f-data)}
 .check-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1.5px solid var(--rule);border-radius:11px;cursor:pointer}
 .check-row input{width:22px;height:22px;margin:0;accent-color:var(--leaf);flex:none}
 .check-row span{display:grid;min-width:0}
@@ -400,6 +413,19 @@ dialog{color:var(--ink)}
       <button type="submit" class="btn btn-primary" id="btn-salvar-prod">Criar produtor</button>
     </div>
     <button type="button" class="btn btn-quiet-danger" id="btn-excluir-prod" data-icon="trash" hidden>Excluir produtor</button>
+  </form>
+</dialog>
+
+<dialog class="sheet" id="dlg-prazos" aria-labelledby="pz-t">
+  <form class="sheet-in" id="form-prazos" novalidate>
+    <div class="sheet-h"><h2 id="pz-t">Prazo no vegetativo</h2><button type="button" class="icon-btn" data-close aria-label="Fechar" data-icon="close"></button></div>
+    <p class="sheet-p">Dias contados a partir da última avaliação, para áreas no vegetativo. Áreas com a última avaliação em R1 ou depois não têm prazo: aparecem na lista "Áreas no reprodutivo". Vale para todos os produtores.</p>
+    <div class="field">
+      <span class="flabel">Avisar entre</span>
+      <div class="range-row"><span>de</span><input class="input mono num" id="pz-vi" inputmode="numeric" maxlength="3" aria-label="Vegetativo: início do prazo em dias"><span>a</span><input class="input mono num" id="pz-vf" inputmode="numeric" maxlength="3" aria-label="Vegetativo: fim do prazo em dias"><span>dias</span></div>
+    </div>
+    <p class="err" id="e-prazos" hidden></p>
+    <div class="sheet-actions"><button type="button" class="btn" data-close>Cancelar</button><button type="submit" class="btn btn-primary" id="pz-ok">Salvar prazo</button></div>
   </form>
 </dialog>
 
@@ -659,31 +685,63 @@ function nextEvalKey(p) {
   Object.keys(av).forEach(function (k) { if (/^a\d+$/.test(k)) max = Math.max(max, evalNum(k)); });
   return 'a' + (max + 1);
 }
-/* Prazo das avaliações: janela de 10 a 15 dias após a última avaliação (ou após o plantio, antes da primeira). */
-var PRAZO_INICIO = 10, PRAZO_FIM = 15;
+/* Prazo das avaliações: janela contada da última avaliação (ou do plantio, antes da primeira).
+   A fase vem do estádio da última avaliação: R1 em diante usa o prazo do reprodutivo. */
+var PRAZOS_PADRAO = { vegInicio: 10, vegFim: 15, repInicio: 15, repFim: 20 };
+function normPrazos(c) {
+  c = c || {};
+  var out = {};
+  Object.keys(PRAZOS_PADRAO).forEach(function (k) {
+    var n = Number(c[k]);
+    out[k] = (Number.isInteger(n) && n >= 1 && n <= 120) ? n : PRAZOS_PADRAO[k];
+  });
+  if (out.vegInicio > out.vegFim) { out.vegInicio = PRAZOS_PADRAO.vegInicio; out.vegFim = PRAZOS_PADRAO.vegFim; }
+  if (out.repInicio > out.repFim) { out.repInicio = PRAZOS_PADRAO.repInicio; out.repFim = PRAZOS_PADRAO.repFim; }
+  return out;
+}
+function ehReprodutivo(est) { return /^\s*R\s*\d/i.test(String(est || '')); }
 function addDays(iso, n) {
   if (!isISODate(iso)) return '';
   var p = iso.split('-').map(Number), d = new Date(Date.UTC(p[0], p[1] - 1, p[2] + n));
   return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
 }
-function statusAval(p, hoje) {
+function statusAval(p, hoje, prazos) {
   if (!p) return null;
   if (p.encerrado) return { estado: 'off' };
   hoje = hoje || todayISO();
-  var base = '', origem = 'ultima';
-  evalList(p).forEach(function (e) { if (evalTemConteudo(e.a, 0) && isISODate(e.a.data) && e.a.data > base) base = e.a.data; });
+  prazos = normPrazos(prazos);
+  var base = '', origem = 'ultima', estBase = '';
+  evalList(p).forEach(function (e) {
+    if (evalTemConteudo(e.a, 0) && isISODate(e.a.data) && e.a.data >= base) { base = e.a.data; estBase = e.a.estadio || ''; }
+  });
   if (!base) { if (!isISODate(p.dataPlantio)) return null; base = p.dataPlantio; origem = 'plantio'; }
+  var rep = ehReprodutivo(estBase);
   var dias = daysBetween(base, hoje);
+  /* no reprodutivo não há prazo fixo: a área vai para a lista "Áreas no reprodutivo" */
+  if (rep) return { estado: 'rep', base: base, origem: origem, dias: dias, fase: 'reprodutivo', estadioBase: String(estBase).trim() };
+  var ini = prazos.vegInicio, fim = prazos.vegFim;
   return {
-    estado: dias < PRAZO_INICIO ? 'ok' : dias <= PRAZO_FIM ? 'janela' : 'atrasada',
-    base: base, origem: origem, dias: dias,
-    inicio: addDays(base, PRAZO_INICIO), limite: addDays(base, PRAZO_FIM),
-    faltam: PRAZO_INICIO - dias, restam: PRAZO_FIM - dias, atraso: dias - PRAZO_FIM
+    estado: dias < ini ? 'ok' : dias <= fim ? 'janela' : 'atrasada',
+    base: base, origem: origem, dias: dias, fase: rep ? 'reprodutivo' : 'vegetativo', estadioBase: estBase,
+    prazoIni: ini, prazoFim: fim,
+    inicio: addDays(base, ini), limite: addDays(base, fim),
+    faltam: ini - dias, restam: fim - dias, atraso: dias - fim
   };
+}
+function haDias(d) { return d == null ? '' : d <= 0 ? 'hoje' : d === 1 ? 'há 1 dia' : 'há ' + d + ' dias'; }
+function textoFase(st) {
+  if (!st || st.estado === 'off') return '';
+  if (st.estado === 'rep') return 'Fase reprodutiva: sem prazo fixo. A área aparece na lista "Áreas no reprodutivo" da tela inicial.';
+  var de = 'de ' + st.prazoIni + ' a ' + st.prazoFim + ' dias';
+  if (st.origem === 'plantio') return 'Contando a partir do plantio (' + fmtDateShort(st.base) + '): próxima avaliação ' + de + ' depois.';
+  var est = String(st.estadioBase || '').trim();
+  return (st.fase === 'reprodutivo' ? 'Fase reprodutiva' : 'Fase vegetativa') + (est ? ' (última avaliação em ' + est + ', ' + fmtDateShort(st.base) + ')' : '') +
+    ': próxima avaliação ' + de + ' depois.';
 }
 function textoAval(st) {
   if (!st) return '';
   if (st.estado === 'off') return 'Acompanhamento encerrado';
+  if (st.estado === 'rep') return 'Reprodutivo · ' + st.estadioBase + ' · última avaliação ' + haDias(st.dias);
   if (st.estado === 'ok') return 'Próxima avaliação a partir de ' + fmtDateShort(st.inicio) + (st.faltam === 1 ? ' (amanhã)' : ' (em ' + st.faltam + ' dias)');
   if (st.estado === 'janela') return st.restam === 0 ? 'Avaliar hoje · último dia do prazo'
     : 'Avaliar até ' + fmtDateShort(st.limite) + ' · ' + (st.restam === 1 ? 'resta 1 dia' : 'restam ' + st.restam + ' dias');
@@ -1140,7 +1198,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     fotosPid: null, fotos: [], fotosLoaded: false, unsubFotos: null,
     queue: [], uploading: false, uploadTarget: null,
     route: { view: 'home' }, search: '', usage: null,
-    recent: new Set()
+    recent: new Set(),
+    prazos: normPrazos(null)
   };
   function waitingFor(pid) { return !S.loaded || S.recent.has(pid); }
 
@@ -1364,6 +1423,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     var list = h('div', { class: 'folders' });
     var usage = h('p', { class: 'usage' });
     var dueWrap = h('div');
+    var prazosLine = h('div', { class: 'prazos-line' });
     view.append(
       h('div', { class: 'brand' },
         h('img', { class: 'logo-on-light', src: LOGO_ESCURA, alt: 'Verdivo Agroscience' }),
@@ -1371,7 +1431,7 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
       h('header', { class: 'top' },
         h('div', { class: 'eyebrow' }, 'Avaliação agronômica de campo'),
         h('div', { class: 'top-row' }, h('h1', null, 'Produtores'), count)),
-      dueWrap, searchWrap, list, usage);
+      dueWrap, searchWrap, list, prazosLine, usage);
     var btnNovo = h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { openProdForm(null); } }, icon('plus', 22), 'Novo produtor');
     setBar([btnNovo]);
 
@@ -1381,8 +1441,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
       if (S.failed) { list.replaceChildren(failBox()); count.textContent = ''; searchWrap.hidden = true; usage.textContent = ''; dueWrap.replaceChildren(); return; }
       if (!S.loaded) { list.replaceChildren(h('div', { class: 'skel' }), h('div', { class: 'skel' }), h('div', { class: 'skel' })); return; }
       var all = Array.from(S.produtores.entries());
-      var box = dueBox(all);
-      dueWrap.replaceChildren.apply(dueWrap, box ? [box] : []);
+      var box = dueBox(all), rbox = repBox(all);
+      dueWrap.replaceChildren.apply(dueWrap, [box, rbox].filter(Boolean));
       count.textContent = all.length ? String(all.length) : '';
       searchWrap.hidden = all.length < 6;
       if (!all.length) {
@@ -1398,6 +1458,10 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         list.replaceChildren.apply(list, rows.length ? rows.map(function (e) { return folderCard(e[0], e[1]); })
           : [h('p', { class: 'hint' }, 'Nenhum produtor encontrado para essa busca.')]);
       }
+      var pz = S.prazos;
+      prazosLine.replaceChildren(
+        h('span', null, 'Prazo de avaliação no vegetativo: ' + pz.vegInicio + ' a ' + pz.vegFim + ' dias · reprodutivo sem prazo fixo'),
+        S.canWrite && S.db ? h('button', { type: 'button', class: 'link-btn', onclick: openPrazos }, 'Ajustar prazo') : null);
       usage.textContent = S.usage && S.usage.bytes > 0
         ? 'Fotos guardadas: ' + fmtBytes(S.usage.bytes) + (S.usage.maxBytes ? ' de ' + fmtBytes(S.usage.maxBytes) : '')
         : '';
@@ -1424,14 +1488,30 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         p.consultor ? h('span', { class: 'folder-cons' }, h('span', { class: 'muted' }, 'Consultor: '), p.consultor) : null,
         h('span', { class: 'folder-meta' }, meta, dap != null && dap >= 0 ? h('span', { class: 'mono' }, ' · ' + dap + ' DAP') : null),
         h('span', { class: 'folder-status' + (done ? ' done' : '') }, h('span', { class: 'dot' }), status),
-        dueChip(statusAval(p))));
+        dueChip(statusAval(p, null, S.prazos))));
   }
   function dueChip(st) {
     if (!st) return null;
     return h('span', { class: 'due due-' + st.estado }, st.estado === 'ok' || st.estado === 'off' ? null : h('span', { class: 'dot' }), textoAval(st));
   }
+  /* áreas cuja última avaliação foi em R1 ou depois: estádio, data e há quantos dias */
+  function repBox(all) {
+    var rep = all.map(function (e) { return { id: e[0], p: e[1], st: statusAval(e[1], null, S.prazos) }; })
+      .filter(function (x) { return x.st && x.st.estado === 'rep'; })
+      .sort(function (a, b) { return b.st.dias - a.st.dias || byName(String(a.p.nome || ''), String(b.p.nome || '')); });
+    if (!rep.length) return null;
+    return h('section', { class: 'duebox repbox' },
+      h('h2', { class: 'sec-t' }, 'Áreas no reprodutivo (' + rep.length + ')'),
+      rep.map(function (x) {
+        return h('a', { class: 'duerow', href: '#p-' + x.id },
+          h('b', null, x.p.nome || 'Sem nome'), icon('right', 20),
+          h('span', { class: 'rep-meta' },
+            h('span', { class: 'stage-tag' }, x.st.estadioBase),
+            h('span', null, 'Última avaliação ' + fmtDate(x.st.base) + ' · ', h('strong', null, haDias(x.st.dias)))));
+      }));
+  }
   function dueBox(all) {
-    var pend = all.map(function (e) { return { id: e[0], p: e[1], st: statusAval(e[1]) }; })
+    var pend = all.map(function (e) { return { id: e[0], p: e[1], st: statusAval(e[1], null, S.prazos) }; })
       .filter(function (x) { return x.st && (x.st.estado === 'janela' || x.st.estado === 'atrasada'); })
       .sort(function (a, b) { return b.st.dias - a.st.dias || byName(String(a.p.nome || ''), String(b.p.nome || '')); });
     if (!pend.length) return null;
@@ -1497,8 +1577,8 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
         : [evalTile(p, pid, 'a1', 0, {})];
       evals.replaceChildren.apply(evals, tiles);
       btnNova.hidden = !S.canWrite || !lista.length;
-      var prazo = dueChip(statusAval(p));
-      dueLine.replaceChildren.apply(dueLine, prazo ? [prazo] : []);
+      var stP = statusAval(p, null, S.prazos), prazo = dueChip(stP), fase = textoFase(stP);
+      dueLine.replaceChildren.apply(dueLine, prazo ? [prazo].concat(fase ? [h('p', { class: 'hint fase' }, fase)] : []) : []);
     }
     return { update: upd };
   }
@@ -2548,6 +2628,41 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
     } catch (e) { prog.close(); toast(dbErrMsg(e), true); maybeReadOnly(e); }
   });
 
+  /* ---------- prazos de avaliação (vegetativo e reprodutivo) ---------- */
+  var PZ = { vi: 'vegInicio', vf: 'vegFim' };
+  function openPrazos() {
+    Object.keys(PZ).forEach(function (k) { var el = $('#pz-' + k); el.value = String(S.prazos[PZ[k]]); el.removeAttribute('aria-invalid'); });
+    $('#e-prazos').hidden = true;
+    $('#dlg-prazos').showModal();
+  }
+  $('#form-prazos').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    if (!S.db) return;
+    var vals = {}, bad = null;
+    Object.keys(PZ).forEach(function (k) {
+      var el = $('#pz-' + k), n = Number(String(el.value).trim());
+      var ok = /^\d{1,3}$/.test(String(el.value).trim()) && n >= 1 && n <= 120;
+      el.setAttribute('aria-invalid', ok ? 'false' : 'true');
+      if (!ok && !bad) bad = el;
+      vals[PZ[k]] = n;
+    });
+    var err = $('#e-prazos');
+    function fail(msg, el) { err.textContent = msg; err.hidden = false; if (el) el.focus(); }
+    if (bad) return fail('Use números inteiros de 1 a 120 dias.', bad);
+    if (vals.vegInicio > vals.vegFim) return fail('O início do prazo não pode ser maior que o fim.', $('#pz-vi'));
+    var btn = $('#pz-ok');
+    btn.disabled = true;
+    try {
+      await dbw(function () { return S.db.doc('config/prazos').set(Object.assign({ atualizadoEm: new Date().toISOString() }, vals)); });
+      S.prazos = normPrazos(vals);
+      $('#dlg-prazos').close();
+      render();
+      toast('Prazo salvo');
+    } catch (x) {
+      fail(x && x.code === 'invalid_argument' ? 'Sem permissão para salvar o prazo. Confira as regras do banco de dados.' : dbErrMsg(x));
+    } finally { btn.disabled = false; }
+  });
+
   /* ---------- início ---------- */
   document.documentElement.lang = 'pt-BR';
   fillDatalist('#dl-estadios', STAGES);
@@ -2573,6 +2688,12 @@ var LOGO_CLARA = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAABwCAYAAAAA
       } catch (e) { S.writeUnknown = true; }
     } else S.writeUnknown = true;
     subscribeProdutores();
+    try {
+      S.db.doc('config/prazos').onSnapshot(function (snap) {
+        S.prazos = normPrazos(snap.exists ? snap.data() : null);
+        render();
+      }, function () { /* sem acesso à configuração: usa os prazos padrão */ });
+    } catch (e) { /* idem */ }
     ensureFotos(S.route.pid || null);
     render();
     loadUsage();
